@@ -3,28 +3,34 @@ import { Card, CardBody, Button, Tooltip, addToast } from "@heroui/react";
 import { Icon } from '@iconify/react';
 import { motion } from 'framer-motion';
 import { PlayerScore, GameSettings } from '../types';
-import { ScoreChart } from './ScoreChart';
+import { ScoreChart } from './ScoreChart'; // ScoreChart に settings を渡すように変更
 
 interface ScoreResultCardProps {
   scores: PlayerScore[];
   settings: GameSettings;
+  isSessionSummary?: boolean; // 対局会サマリーかどうか
+  sessionName?: string; // 対局会名
 }
 
-export const ScoreResultCard: React.FC<ScoreResultCardProps> = ({ scores, settings }) => {
-  // Sort scores by rank
+export const ScoreResultCard: React.FC<ScoreResultCardProps> = ({ scores, settings, isSessionSummary = false, sessionName }) => {
   const sortedScores = [...scores].sort((a, b) => (a.rank || 0) - (b.rank || 0));
   
-  // Generate shareable text
   const generateShareableText = () => {
     const date = new Date().toLocaleDateString();
-    let text = `【麻雀対局結果】${date}\n\n`;
+    let text = isSessionSummary 
+        ? `【麻雀対局会結果】${sessionName || date}\n`
+        : `【麻雀対局結果】${date}\n`;
     
-    sortedScores.forEach((score, index) => {
-      text += `${score.rank}位: ${score.name} ${score.finalScore?.toFixed(1)}pt (${score.rawScore}点)\n`;
+    text += `\nルール: ${settings.startingPoints}点持ち / ${settings.returnPoints}点返し / ウマ: ${settings.uma}\n\n`;
+
+    sortedScores.forEach((score) => {
+      text += `${score.rank}位: ${score.name} ${score.finalScore?.toFixed(1)}pt`;
+      if (!isSessionSummary) { // 半荘ごとの結果なら素点も表示
+        text += ` (${score.rawScore}点)`;
+      }
+      text += `\n`;
     });
-    
-    text += `\n持ち点: ${settings.startingPoints}点 / ウマ: ${settings.uma}`;
-    
+        
     return text;
   };
   
@@ -34,7 +40,7 @@ export const ScoreResultCard: React.FC<ScoreResultCardProps> = ({ scores, settin
     
     addToast({
       title: "コピーしました",
-      description: "対局結果をクリップボードにコピーしました",
+      description: "結果をクリップボードにコピーしました",
       severity: "success",
     });
   };
@@ -43,7 +49,9 @@ export const ScoreResultCard: React.FC<ScoreResultCardProps> = ({ scores, settin
     <Card className="bg-content1">
       <CardBody>
         <div className="flex flex-wrap justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">対局結果</h2>
+          <h2 className="text-xl font-semibold">
+            {isSessionSummary ? `${sessionName || ""} の総合結果` : "対局結果"}
+          </h2>
           <div className="flex gap-2">
             <Tooltip content="結果をコピー">
               <Button
@@ -59,7 +67,6 @@ export const ScoreResultCard: React.FC<ScoreResultCardProps> = ({ scores, settin
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Score Table */}
           <div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[400px]">
@@ -67,16 +74,18 @@ export const ScoreResultCard: React.FC<ScoreResultCardProps> = ({ scores, settin
                   <tr className="border-b border-default-200">
                     <th className="py-2 px-2 text-left">順位</th>
                     <th className="py-2 px-2 text-left">プレイヤー</th>
-                    <th className="py-2 px-2 text-right">素点</th>
-                    <th className="py-2 px-2 text-right">ウマ</th>
-                    <th className="py-2 px-2 text-right">オカ</th>
-                    <th className="py-2 px-2 text-right font-bold">最終点</th>
+                    {!isSessionSummary && <th className="py-2 px-2 text-right">素点</th>}
+                    {!isSessionSummary && <th className="py-2 px-2 text-right">ウマ</th>}
+                    {!isSessionSummary && <th className="py-2 px-2 text-right">オカ</th>}
+                    <th className="py-2 px-2 text-right font-bold">
+                      {isSessionSummary ? "総合Pt" : "最終点"}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedScores.map((score, index) => (
                     <motion.tr 
-                      key={index}
+                      key={score.playerId || index}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
@@ -95,20 +104,24 @@ export const ScoreResultCard: React.FC<ScoreResultCardProps> = ({ scores, settin
                         </div>
                       </td>
                       <td className="py-3 px-2 font-medium">{score.name}</td>
-                      <td className="py-3 px-2 text-right">{score.rawScore.toLocaleString()}</td>
-                      <td className="py-3 px-2 text-right">
-                        <span className={score.umaPoints && score.umaPoints > 0 ? "text-success" : score.umaPoints && score.umaPoints < 0 ? "text-danger" : ""}>
-                          {score.umaPoints?.toFixed(1) || 0}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 text-right">
-                        <span className={score.okaPoints && score.okaPoints > 0 ? "text-success" : score.okaPoints && score.okaPoints < 0 ? "text-danger" : ""}>
-                          {score.okaPoints?.toFixed(1) || 0}
-                        </span>
-                      </td>
+                      {!isSessionSummary && <td className="py-3 px-2 text-right">{score.rawScore.toLocaleString()}</td>}
+                      {!isSessionSummary && (
+                        <td className="py-3 px-2 text-right">
+                          <span className={score.okaPoints && score.okaPoints > 0 ? "text-success" : score.okaPoints && score.okaPoints < 0 ? "text-danger" : ""}>
+                            {score.okaPoints?.toFixed(1) || "0.0"} {/* ウマ */}
+                          </span>
+                        </td>
+                      )}
+                      {!isSessionSummary && (
+                        <td className="py-3 px-2 text-right">
+                          <span className={score.okaBonus && score.okaBonus > 0 ? "text-success" : ""}>
+                            {score.okaBonus && score.okaBonus > 0 ? score.okaBonus.toFixed(1) : "-"} {/* オカ (トップ賞) */}
+                          </span>
+                        </td>
+                      )}
                       <td className="py-3 px-2 text-right font-bold">
                         <span className={score.finalScore && score.finalScore > 0 ? "text-success" : score.finalScore && score.finalScore < 0 ? "text-danger" : ""}>
-                          {score.finalScore?.toFixed(1) || 0}
+                          {score.finalScore?.toFixed(1) || "0.0"}
                         </span>
                       </td>
                     </motion.tr>
@@ -117,14 +130,15 @@ export const ScoreResultCard: React.FC<ScoreResultCardProps> = ({ scores, settin
               </table>
             </div>
             
-            <div className="mt-4 text-sm text-default-500">
-              <p>持ち点: {settings.startingPoints.toLocaleString()}点 / 返し点: {settings.returnPoints.toLocaleString()}点 / ウマ: {settings.uma}</p>
-            </div>
+            {!isSessionSummary && (
+              <div className="mt-4 text-sm text-default-500">
+                <p>持ち点: {settings.startingPoints.toLocaleString()}点 / 返し点: {settings.returnPoints.toLocaleString()}点 / ウマ: {settings.uma}</p>
+              </div>
+            )}
           </div>
           
-          {/* Score Chart */}
           <div className="h-[300px]">
-            <ScoreChart scores={sortedScores} />
+            <ScoreChart scores={sortedScores} settings={settings} isSessionSummary={isSessionSummary} />
           </div>
         </div>
       </CardBody>

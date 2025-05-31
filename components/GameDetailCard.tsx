@@ -2,17 +2,15 @@ import React from 'react';
 import { Card, CardBody, Chip, Button, Tooltip, addToast } from "@heroui/react";
 import { Icon } from '@iconify/react';
 import { GameRecord } from '../types';
-import { ScoreChart } from './ScoreChart';
+import { ScoreChart } from './ScoreChart'; // ScoreChart に settings を渡すように変更
 
 interface GameDetailCardProps {
   record: GameRecord;
 }
 
 export const GameDetailCard: React.FC<GameDetailCardProps> = ({ record }) => {
-  // Sort players by rank
   const sortedPlayers = [...record.players].sort((a, b) => (a.rank || 0) - (b.rank || 0));
   
-  // Generate shareable text
   const generateShareableText = () => {
     const date = new Date(record.date).toLocaleDateString();
     let text = `【麻雀対局結果】${date}\n\n`;
@@ -36,7 +34,7 @@ export const GameDetailCard: React.FC<GameDetailCardProps> = ({ record }) => {
       text += `\n【タグ】${record.tags.join(', ')}\n`;
     }
     
-    text += `\n持ち点: ${record.settings.startingPoints}点 / ウマ: ${record.settings.uma}`;
+    text += `\n持ち点: ${record.settings.startingPoints}点 / 返し点: ${record.settings.returnPoints}点 / ウマ: ${record.settings.uma}`;
     
     return text;
   };
@@ -54,11 +52,11 @@ export const GameDetailCard: React.FC<GameDetailCardProps> = ({ record }) => {
   
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-wrap justify-between items-center">
         <div>
           <h3 className="text-xl font-semibold">
             {new Date(record.date).toLocaleDateString()} の対局
+            {record.sessionId && <span className="text-sm text-default-500 ml-2">(対局会)</span>}
           </h3>
           {record.venue && (
             <p className="text-default-500">
@@ -82,19 +80,17 @@ export const GameDetailCard: React.FC<GameDetailCardProps> = ({ record }) => {
         </div>
       </div>
       
-      {/* Tags */}
       {record.tags && record.tags.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {record.tags.map((tag, i) => (
             <Chip key={i} variant="flat">
-              <Icon icon="lucide:tag" size={14} className="mr-1" />
+              <Icon icon="lucide:tag" width={14} height={14} className="mr-1" />
               {tag}
             </Chip>
           ))}
         </div>
       )}
       
-      {/* Score Table */}
       <Card className="bg-content2">
         <CardBody>
           <div className="overflow-x-auto">
@@ -112,7 +108,7 @@ export const GameDetailCard: React.FC<GameDetailCardProps> = ({ record }) => {
               <tbody>
                 {sortedPlayers.map((player, index) => (
                   <tr 
-                    key={index}
+                    key={player.playerId || index}
                     className={index < sortedPlayers.length - 1 ? "border-b border-default-100" : ""}
                   >
                     <td className="py-3 px-2">
@@ -130,18 +126,18 @@ export const GameDetailCard: React.FC<GameDetailCardProps> = ({ record }) => {
                     <td className="py-3 px-2 font-medium">{player.name}</td>
                     <td className="py-3 px-2 text-right">{player.rawScore.toLocaleString()}</td>
                     <td className="py-3 px-2 text-right">
-                      <span className={player.umaPoints && player.umaPoints > 0 ? "text-success" : player.umaPoints && player.umaPoints < 0 ? "text-danger" : ""}>
-                        {player.umaPoints?.toFixed(1) || 0}
+                      <span className={player.okaPoints && player.okaPoints > 0 ? "text-success" : player.okaPoints && player.okaPoints < 0 ? "text-danger" : ""}>
+                        {player.okaPoints?.toFixed(1) || "0.0"} {/* ウマ */}
                       </span>
                     </td>
                     <td className="py-3 px-2 text-right">
-                      <span className={player.okaPoints && player.okaPoints > 0 ? "text-success" : player.okaPoints && player.okaPoints < 0 ? "text-danger" : ""}>
-                        {player.okaPoints?.toFixed(1) || 0}
+                      <span className={player.okaBonus && player.okaBonus > 0 ? "text-success" : ""}>
+                        {player.okaBonus && player.okaBonus > 0 ? player.okaBonus.toFixed(1) : "-"} {/* オカ (トップ賞) */}
                       </span>
                     </td>
                     <td className="py-3 px-2 text-right font-bold">
                       <span className={player.finalScore && player.finalScore > 0 ? "text-success" : player.finalScore && player.finalScore < 0 ? "text-danger" : ""}>
-                        {player.finalScore?.toFixed(1) || 0}
+                        {player.finalScore?.toFixed(1) || "0.0"}
                       </span>
                     </td>
                   </tr>
@@ -156,12 +152,10 @@ export const GameDetailCard: React.FC<GameDetailCardProps> = ({ record }) => {
         </CardBody>
       </Card>
       
-      {/* Score Chart */}
       <div className="h-[300px]">
-        <ScoreChart scores={sortedPlayers} />
+        <ScoreChart scores={sortedPlayers} settings={record.settings} />
       </div>
       
-      {/* Highlights */}
       {record.highlights && record.highlights.length > 0 && (
         <Card className="bg-content2">
           <CardBody>
@@ -189,7 +183,6 @@ export const GameDetailCard: React.FC<GameDetailCardProps> = ({ record }) => {
         </Card>
       )}
       
-      {/* Expenses */}
       {record.expenses && record.expenses.length > 0 && (
         <Card className="bg-content2">
           <CardBody>
