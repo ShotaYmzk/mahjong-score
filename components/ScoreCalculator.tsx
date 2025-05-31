@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import { 
   Card, 
@@ -9,7 +11,7 @@ import {
   Divider,
   Accordion,
   AccordionItem,
-  Checkbox,
+  // Checkbox, // Unused, commented out
   Modal,
   ModalContent,
   ModalHeader,
@@ -38,6 +40,7 @@ export const ScoreCalculator: React.FC = () => {
     getDefaultSettings, 
     calculateFinalScores,
     activeSession,
+    isContextLoaded, // ★ AppContextから isContextLoaded を取得
     startNewSession,
     addGameToActiveSession,
     completeActiveSession,
@@ -58,7 +61,8 @@ export const ScoreCalculator: React.FC = () => {
   const [tags, setTags] = React.useState<string[]>([]);
   const [venue, setVenue] = React.useState<string>('');
   
-  const [sessionRoundScores, setSessionRoundScores] = React.useState<number[]>(Array(4).fill(getDefaultSettings().startingPoints));
+  // sessionRoundScoresの初期値をactiveSessionに依存させないように変更
+  const [sessionRoundScores, setSessionRoundScores] = React.useState<number[]>([]);
   const [sessionTotalPointsError, setSessionTotalPointsError] = React.useState(false);
   const [showSessionFinalResults, setShowSessionFinalResults] = React.useState(false);
 
@@ -68,6 +72,7 @@ export const ScoreCalculator: React.FC = () => {
   const expenseModal = useDisclosure();
   const sessionSetupModal = useDisclosure();
 
+  // --- 単独対局モード用ロジック (変更なし) ---
   const handleSinglePlayerNameChange = (index: number, value: string) => {
     const updatedScores = [...singleGamePlayerScores];
     const existingPlayer = globalPlayers.find(p => p.name === value);
@@ -88,10 +93,12 @@ export const ScoreCalculator: React.FC = () => {
   
   const [singleGameTotalPointsError, setSingleGameTotalPointsError] = React.useState(false);
   React.useEffect(() => {
-    const totalPoints = singleGamePlayerScores.reduce((sum, player) => sum + player.rawScore, 0);
-    const expectedTotal = singleGameSettings.startingPoints * 4;
-    setSingleGameTotalPointsError(totalPoints !== expectedTotal);
-  }, [singleGamePlayerScores, singleGameSettings.startingPoints]);
+    if (!activeSession) { // 対局会モードでない場合のみ単独ゲームのエラーチェック
+        const totalPoints = singleGamePlayerScores.reduce((sum, player) => sum + player.rawScore, 0);
+        const expectedTotal = singleGameSettings.startingPoints * 4;
+        setSingleGameTotalPointsError(totalPoints !== expectedTotal);
+    }
+  }, [singleGamePlayerScores, singleGameSettings.startingPoints, activeSession]);
 
   const calculateSingleGameScores = () => {
     if (singleGamePlayerScores.some(p => !p.name.trim())) {
@@ -113,10 +120,11 @@ export const ScoreCalculator: React.FC = () => {
       let ensuredPlayerName = score.name;
       if (!ensuredPlayerId && score.name) {
         const newP = addPlayer(score.name);
-        ensuredPlayerId = newP?.id || '';
+        ensuredPlayerId = newP?.id || `new-${score.name.replace(/\s/g, '')}-${Date.now()}`;
+        if(newP) ensuredPlayerName = newP.name;
       } else if (ensuredPlayerId && !score.name) {
         const existingP = globalPlayers.find(p => p.id === ensuredPlayerId);
-        ensuredPlayerName = existingP?.name || '';
+        ensuredPlayerName = existingP?.name || '不明なプレイヤー';
       }
       return { ...score, playerId: ensuredPlayerId, name: ensuredPlayerName };
     });
@@ -142,42 +150,64 @@ export const ScoreCalculator: React.FC = () => {
     setSingleGameCalculatedScores([]); setShowSingleGameResults(false);
   };
 
+  // --- 対局会モード用ロジック ---
   React.useEffect(() => {
-    if (activeSession) {
-      const currentStartingPoints = activeSession.settings.startingPoints;
-      const totalPoints = sessionRoundScores.reduce((sum, score) => sum + score, 0);
-      const expectedTotal = currentStartingPoints * 4;
-      setSessionTotalPointsError(totalPoints !== expectedTotal);
-      
-      // activeSessionが変更された場合（新しいセッション開始時など）にスコアを初期化
-      // ただし、sessionRoundScoresが既に現在のセッションの開始点と同じ場合は再初期化しない
-      const isAlreadyInitializedForCurrentSession = sessionRoundScores.every(score => score === currentStartingPoints) && sessionRoundScores.length === 4;
-      if (!isAlreadyInitializedForCurrentSession) {
-          setSessionRoundScores(Array(4).fill(currentStartingPoints));
+    if (activeSession && activeSession.players && activeSession.players.length > 0) {
+      // activeSession が変更されたら (新しいセッション開始時など)、sessionRoundScores を初期化
+      // ただし、既に適切な長さで初期化されている場合は再初期化しない
+      if (sessionRoundScores.length !== activeSession.players.length || 
+          !sessionRoundScores.every(score => score === activeSession.settings.startingPoints)) {
+        setSessionRoundScores(Array(activeSession.players.length).fill(activeSession.settings.startingPoints));
       }
+    } else if (!activeSession) {
+      // 対局会が終了したらスコアをクリア
+      setSessionRoundScores([]);
     }
-  }, [activeSession, sessionRoundScores]); // sessionRoundScoresも依存配列に追加
+  }, [activeSession]); // activeSession の変更を監視
+
+  React.useEffect(() => {
+    // sessionRoundScores または activeSession.settings.startingPoints が変更されたらエラーチェック
+    if (activeSession && activeSession.players && sessionRoundScores.length === activeSession.players.length) {
+      const totalPoints = sessionRoundScores.reduce((sum, score) => sum + (score || 0), 0);
+      const expectedTotal = activeSession.settings.startingPoints * activeSession.players.length;
+      setSessionTotalPointsError(totalPoints !== expectedTotal);
+    } else if (activeSession && activeSession.players && sessionRoundScores.length !== activeSession.players.length) {
+      // プレイヤー数とスコア配列の長さが不一致の場合はエラーとするか、再初期化を促す
+      setSessionTotalPointsError(true); 
+      // console.warn("Player count and session scores length mismatch.");
+    }
+  }, [sessionRoundScores, activeSession]);
+
 
   const handleSessionScoreChange = (index: number, value: string) => {
-    const score = parseInt(value) || 0;
-    const updatedScores = [...sessionRoundScores];
-    updatedScores[index] = score;
-    setSessionRoundScores(updatedScores);
+    if (!activeSession || !activeSession.players || index < 0 || index >= activeSession.players.length) {
+        console.error("Invalid state for handleSessionScoreChange: activeSession or players missing, or index out of bounds.");
+        return;
+    }
+    const score = parseInt(value) || 0; // NaNの場合は0にする
+    setSessionRoundScores(prevScores => {
+        const updatedScores = [...prevScores];
+        updatedScores[index] = score;
+        return updatedScores;
+    });
   };
 
   const handleRecordAndNextRound = () => {
-    if (!activeSession) return;
+    if (!activeSession || !activeSession.players || sessionRoundScores.length !== activeSession.players.length) {
+        addToast({ title: "エラー", description: "プレイヤー情報またはスコア情報が正しくありません。", severity: "danger"});
+        return;
+    }
     if (sessionTotalPointsError) {
-      addToast({ title: "エラー", description: `合計点数が${activeSession.settings.startingPoints * 4}点になるように調整してください`, severity: "danger"});
+      addToast({ title: "エラー", description: `合計点数が${activeSession.settings.startingPoints * activeSession.players.length}点になるように調整してください`, severity: "danger"});
       return;
     }
     const rawScoresForSession = activeSession.players.map((player, index) => ({
       playerId: player.id,
       name: player.name,
-      rawScore: sessionRoundScores[index]
+      rawScore: sessionRoundScores[index] // sessionRoundScores[index] が数値であることを期待
     }));
     addGameToActiveSession(rawScoresForSession);
-    // スコア入力欄はuseEffectでactiveSession.settings.startingPointsに基づいてリセットされる
+    // 次の半荘のためにスコアを初期化するロジックはuseEffectに依存
   };
 
   const handleCompleteSessionFlow = () => {
@@ -186,10 +216,14 @@ export const ScoreCalculator: React.FC = () => {
   };
   
   const handleStartNewSession = (name: string, players: Player[], settings: GameSettings) => {
-    startNewSession(name, players, settings);
-    setShowSessionFinalResults(false);
+    const session = startNewSession(name, players, settings);
+    if (session) { // セッション開始が成功した場合のみ
+        setShowSessionFinalResults(false);
+        // sessionRoundScores の初期化は useEffect で行われる
+    }
   };
 
+  // --- 共通ロジック (変更なし) ---
   const handleAddHighlight = () => {
     if (newHighlight.text.trim()) {
       setHighlights(prev => [...prev, { ...newHighlight, text: newHighlight.text.trim() }]);
@@ -204,6 +238,33 @@ export const ScoreCalculator: React.FC = () => {
     expenseModal.onClose();
   };
 
+  const playersForExpenseCalc = React.useMemo((): PlayerScore[] => {
+    if (singleGameCalculatedScores.length > 0) {
+      return singleGameCalculatedScores;
+    }
+    if (activeSession && activeSession.players) {
+      return activeSession.players.map((p: Player): PlayerScore => ({
+        playerId: p.id,
+        name: p.name,
+        rawScore: 0, 
+        finalScore: 0,
+      }));
+    }
+    return [];
+  }, [singleGameCalculatedScores, activeSession]);
+
+  // ★ Contextのデータがロードされるまでローディング表示
+  if (!isContextLoaded) {
+    return (
+      <div className="flex justify-center items-center h-60">
+        <p>データを読み込んでいます...</p>
+        {/* ここはSpinnerなどに置き換え可能 */}
+        {/* <Spinner label="読み込み中..." color="primary" labelColor="primary"/> */}
+      </div>
+    );
+  }
+
+
   if (activeSession) {
     if (showSessionFinalResults) {
         const finalSummary = getActiveSessionSummary();
@@ -217,10 +278,27 @@ export const ScoreCalculator: React.FC = () => {
                         sessionName={activeSession.name}
                     />
                 )}
-                <Button color="primary" onPress={() => setShowSessionFinalResults(false)}>
+                <Button color="primary" onPress={() => {
+                    setShowSessionFinalResults(false);
+                    // 対局会モードのメイン画面に戻った際にスコアをリセットする
+                    if (activeSession) { // activeSessionがまだ存在する場合 (稀だが念のため)
+                        setSessionRoundScores(Array(activeSession.players.length).fill(activeSession.settings.startingPoints));
+                    }
+                }}>
                     スコア計算に戻る
                 </Button>
             </motion.div>
+        );
+    }
+
+    // activeSession.players が存在し、sessionRoundScores が適切な長さであることを確認
+    if (!activeSession.players || sessionRoundScores.length !== activeSession.players.length) {
+        // データがまだ準備できていないか、不整合がある場合はローディング表示またはエラー表示
+        return (
+            <div className="flex justify-center items-center h-60">
+                <p>対局会データを準備中です...</p>
+                 {/* <Spinner label="準備中..." /> */}
+            </div>
         );
     }
 
@@ -246,17 +324,20 @@ export const ScoreCalculator: React.FC = () => {
                   <Input
                     type="number"
                     label="素点"
+                    step="100"
+                    // valueがundefinedやnullにならないようにフォールバックを設定
                     value={sessionRoundScores[index]?.toString() ?? activeSession.settings.startingPoints.toString()}
                     onValueChange={(value) => handleSessionScoreChange(index, value)}
                     endContent={<span className="text-default-400">点</span>}
                     color={sessionTotalPointsError ? "danger" : "default"}
+                    min={-Infinity} // 必要に応じて最小値を設定 (例: 0)
                   />
                 </div>
               ))}
               {sessionTotalPointsError && (
                 <p className="text-danger text-sm">
                   <Icon icon="lucide:alert-circle" className="inline-block mr-1" />
-                  合計点数が{activeSession.settings.startingPoints * 4}点になるように調整してください
+                  合計点数が {activeSession.settings.startingPoints * activeSession.players.length} 点になるように調整してください
                   (現在: {sessionRoundScores.reduce((sum, score) => sum + (score || 0), 0)}点)
                 </p>
               )}
@@ -278,6 +359,7 @@ export const ScoreCalculator: React.FC = () => {
     );
   }
 
+  // 単独対局モード / 対局会開始前
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -295,7 +377,7 @@ export const ScoreCalculator: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Input type="number" label="持ち点" value={singleGameSettings.startingPoints.toString()} onValueChange={(v) => setSingleGameSettings(s => ({...s, startingPoints: parseInt(v) || 0}))} endContent="点"/>
                     <Input type="number" label="返し点" value={singleGameSettings.returnPoints.toString()} onValueChange={(v) => setSingleGameSettings(s => ({...s, returnPoints: parseInt(v) || 0}))} endContent="点"/>
-                    <Select label="ウマ" selectedKeys={[singleGameSettings.uma]} onChange={(e) => setSingleGameSettings(s => ({...s, uma: e.target.value}))}>
+                    <Select label="ウマ" selectedKeys={[singleGameSettings.uma]} onChange={(e) => setSingleGameSettings(s => ({...s, uma: e.target.value}))} aria-label="ウマ選択（単独）">
                         <SelectItem key="なし">なし</SelectItem>
                         <SelectItem key="5-10">5-10</SelectItem>
                         <SelectItem key="10-20">10-20</SelectItem>
@@ -311,8 +393,17 @@ export const ScoreCalculator: React.FC = () => {
                     {singleGamePlayerScores.map((player, index) => (
                         <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input label={`プレイヤー ${index + 1}`} placeholder="名前を入力" value={player.name} onValueChange={(v) => handleSinglePlayerNameChange(index, v)} list={`players-list-${index}`}/>
-                        <datalist id={`players-list-${index}`}> {globalPlayers.map(p => (<option key={p.id} value={p.name} />))} </datalist>
-                        <Input type="number" label="素点" value={player.rawScore.toString()} onValueChange={(v) => handleSingleScoreChange(index, v)} endContent="点" color={singleGameTotalPointsError ? "danger" : "default"}/>
+                        <datalist id={`players-list-${index}`}> {isContextLoaded && globalPlayers.map(p => (<option key={p.id} value={p.name} />))} </datalist>
+                        <Input 
+                            type="number" 
+                            label="素点" 
+                            step="100" 
+                            value={player.rawScore.toString()} 
+                            onValueChange={(v) => handleSingleScoreChange(index, v)} 
+                            endContent="点" 
+                            color={singleGameTotalPointsError ? "danger" : "default"}
+                            min={-Infinity}
+                        />
                         </div>
                     ))}
                     {singleGameTotalPointsError && (
@@ -345,7 +436,7 @@ export const ScoreCalculator: React.FC = () => {
                       <div className="flex flex-wrap gap-2 items-center">
                         <p className="font-medium">タグ:</p>
                         {tags.map((t, i) => ( <Chip key={i} onClose={() => handleRemoveTag(t)} variant="flat">{t}</Chip> ))}
-                        <Input size="sm" placeholder="タグを追加してEnter" className="max-w-[150px]" onKeyDown={(e) => { if (e.key === 'Enter') { handleAddTag((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = '';}}}/>
+                        <Input size="sm" placeholder="タグを追加してEnter" className="max-w-[150px]" onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLInputElement).value) { handleAddTag((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = '';}}}/>
                       </div>
                       <Input label="対局場所" placeholder="例: 〇〇雀荘" value={venue} onValueChange={setVenue}/>
                     </div>
@@ -406,18 +497,7 @@ export const ScoreCalculator: React.FC = () => {
 
       {expenseModal.isOpen && (
         <ExpenseCalculator
-          players={
-            singleGameCalculatedScores.length > 0
-              ? singleGameCalculatedScores
-              : (activeSession 
-                  ? activeSession.players.map((p): PlayerScore => ({
-                      playerId: p.id,
-                      name: p.name,
-                      rawScore: 0,
-                      finalScore: 0, 
-                    }))
-                  : [])
-          }
+          players={playersForExpenseCalc}
           expenses={expenses}
           onClose={expenseModal.onClose}
           onSave={handleExpensesUpdate}

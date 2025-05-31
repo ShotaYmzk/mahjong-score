@@ -12,7 +12,7 @@ export const RivalAnalysis: React.FC<RivalAnalysisProps> = ({ records }) => {
   if (records.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <Icon icon="lucide:users" size={48} className="text-default-300 mb-4" />
+        <Icon icon="lucide:users" width={48} height={48} className="text-default-300 mb-4" /> {/* size を width/height に変更 */}
         <p className="text-default-500 text-center">
           他のプレイヤーとの対戦記録がまだありません。<br />
           複数回の対局を記録して相性を分析しましょう。
@@ -64,7 +64,7 @@ export const RivalAnalysis: React.FC<RivalAnalysisProps> = ({ records }) => {
                         <Icon 
                           icon={record.pointsDifference >= 0 ? "lucide:trending-up" : "lucide:trending-down"} 
                           className={record.pointsDifference >= 0 ? "text-success" : "text-danger"} 
-                          size={16}
+                          width={16} height={16} // size を width/height に変更
                         />
                       </Tooltip>
                     </div>

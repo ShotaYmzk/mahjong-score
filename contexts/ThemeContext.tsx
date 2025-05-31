@@ -1,42 +1,44 @@
-import React from 'react';
-import { useTheme } from '@heroui/use-theme';
+// "use client"; 
 
-interface ThemeContextType {
-  isDarkMode: boolean;
-  toggleTheme: () => void;
-}
+// import React from 'react';
+// import { useTheme as useNextTheme } from 'next-themes';
 
-export const ThemeContext = React.createContext<ThemeContextType>({
-  isDarkMode: false,
-  toggleTheme: () => {},
-});
+// interface ThemeContextType {
+//   isDarkMode: boolean;
+//   toggleTheme: () => void;
+// }
 
-interface ThemeProviderProps {
-  children: React.ReactNode;
-}
+// export const ThemeContext = React.createContext<ThemeContextType>({
+//   isDarkMode: false,
+//   toggleTheme: () => {},
+// });
 
-export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  const { theme, setTheme } = useTheme();
-  const [isDarkMode, setIsDarkMode] = React.useState(theme === 'dark');
+// interface ThemeProviderProps {
+//   children: React.ReactNode;
+// }
 
-  // Check system preference on mount
-  React.useEffect(() => {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (prefersDark && theme !== 'dark') {
-      setTheme('dark');
-      setIsDarkMode(true);
-    }
-  }, []);
+// export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
+//   const { theme, setTheme, systemTheme } = useNextTheme();
+//   const [isMounted, setIsMounted] = React.useState(false);
 
-  const toggleTheme = React.useCallback(() => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    setIsDarkMode(newTheme === 'dark');
-  }, [theme, setTheme]);
+//   React.useEffect(() => {
+//     setIsMounted(true);
+//   }, []);
 
-  return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
-};
+//   const currentTheme = theme === "system" ? systemTheme : theme;
+//   const isDarkMode = currentTheme === 'dark';
+
+//   const toggleTheme = React.useCallback(() => {
+//     setTheme(isDarkMode ? 'light' : 'dark');
+//   }, [isDarkMode, setTheme]);
+
+//   if (!isMounted) {
+//     return null; 
+//   }
+
+//   return (
+//     <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
+//       {children}
+//     </ThemeContext.Provider>
+//   );
+// };

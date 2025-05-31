@@ -1,20 +1,37 @@
-import React from 'react';
-import { Tabs, Tab, Navbar, NavbarBrand, NavbarContent, Switch, Button } from "@heroui/react";
-import { Icon } from '@iconify/react';
-import { ThemeContext } from './contexts/ThemeContext';
-import { ScoreCalculator } from './components/ScoreCalculator';
-import { Dashboard } from './components/Dashboard';
-import { GameHistory } from './components/GameHistory';
-import { AppProvider } from './contexts/AppContext';
+"use client"; 
 
-const App: React.FC = () => {
-  const { isDarkMode, toggleTheme } = React.useContext(ThemeContext);
-  const [selected, setSelected] = React.useState("calculator");
+import React from 'react';
+import { Tabs, Tab, Navbar as HeroNavbar, NavbarBrand, NavbarContent, Switch } from "@heroui/react";
+import { Icon } from '@iconify/react';
+import { useTheme } from 'next-themes';
+import { ScoreCalculator } from '@/components/ScoreCalculator';
+import { Dashboard } from '@/components/Dashboard';
+import { GameHistory } from '@/components/GameHistory';
+import { AppProvider } from '@/contexts/AppContext';
+
+const MahjongLifeLogApp: React.FC = () => { // ★ コンポーネント名を MahjongLifeLogApp に統一
+  const { theme, setTheme } = useTheme();
+  const [isMounted, setIsMounted] = React.useState(false);
+  const [selectedTab, setSelectedTab] = React.useState("calculator"); // ★ selectedTab の state をここで定義
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const isDarkMode = isMounted && theme === 'dark';
+
+  const toggleTheme = () => {
+    setTheme(isDarkMode ? 'light' : 'dark');
+  };
+
+  if (!isMounted) {
+    return null; 
+  }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       <AppProvider>
-        <Navbar isBordered maxWidth="xl" className="bg-content1">
+        <HeroNavbar isBordered maxWidth="xl" className="bg-content1">
           <NavbarBrand>
             <Icon icon="lucide:layers" className="text-primary text-2xl" />
             <p className="font-bold text-inherit ml-2">麻雀ライフログ</p>
@@ -30,13 +47,13 @@ const App: React.FC = () => {
               />
             </div>
           </NavbarContent>
-        </Navbar>
+        </HeroNavbar>
 
         <div className="container mx-auto px-4 py-6">
           <Tabs 
             aria-label="メインナビゲーション" 
-            selectedKey={selected} 
-            onSelectionChange={setSelected as any}
+            selectedKey={selectedTab} 
+            onSelectionChange={(key) => setSelectedTab(key as string)}
             className="mb-6"
             variant="underlined"
             color="primary"
@@ -79,6 +96,6 @@ const App: React.FC = () => {
       </AppProvider>
     </div>
   );
-}
+};
 
-export default App;
+export default MahjongLifeLogApp; // ★ MahjongLifeLogApp をデフォルトエクスポート
